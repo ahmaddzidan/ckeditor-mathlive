@@ -1,0 +1,32 @@
+{
+  "name": "ckeditor-mathlive",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "webpack --mode production"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@ckeditor/ckeditor5-basic-styles": "^44.2.1",
+    "@ckeditor/ckeditor5-dev-utils": "^43.0.1",
+    "@ckeditor/ckeditor5-editor-classic": "^44.2.1",
+    "@ckeditor/ckeditor5-essentials": "^44.2.1",
+    "@ckeditor/ckeditor5-heading": "^44.2.1",
+    "@ckeditor/ckeditor5-image": "^44.2.1",
+    "@ckeditor/ckeditor5-link": "^44.2.1",
+    "@ckeditor/ckeditor5-list": "^44.2.1",
+    "@ckeditor/ckeditor5-paragraph": "^44.2.1",
+    "@ckeditor/ckeditor5-table": "^44.2.1",
+    "@ckeditor/ckeditor5-theme-lark": "^44.2.1",
+    "@yayure/ckeditor5-mathlive": "^41.4.0",
+    "mathlive": "^0.104.0"
+  },
+  "devDependencies": {
+    "webpack": "^5.98.0",
+    "webpack-cli": "^6.0.1"
+  }
+}

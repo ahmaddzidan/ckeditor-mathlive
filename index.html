@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CKEditor 5 with MathLive</title>
+    <link rel="stylesheet" href="https://unpkg.com/mathlive/dist/mathlive-static.css" />
+    <script defer src="https://unpkg.com/mathlive"></script>
+    <script src="build/ckeditor_classic.js"></script>
+</head>
+
+<body>
+    <textarea id="editor"></textarea>
+    <script>
+        ClassicEditor
+            .create(document.querySelector('#editor'), {
+                licenseKey: 'GPL',
+            })
+            .catch(error => {
+                console.error(error);
+            });
+
+    </script>
+</body>
+
+</html>
