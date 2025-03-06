@@ -21,7 +21,7 @@ import MediaEmbed from "@ckeditor/ckeditor5-media-embed/src/mediaembed";
 import SimpleUploadAdapter from "@ckeditor/ckeditor5-upload/src/adapters/simpleuploadadapter";
 import 'mathlive';
 import { Mathlive, MathlivePanelview } from '@yayure/ckeditor5-mathlive';
-import { Underline, Bold, Italic } from '@ckeditor/ckeditor5-basic-styles';
+import { Underline, Bold, Italic, Subscript, Superscript } from '@ckeditor/ckeditor5-basic-styles';
 
 class ClassicEditor extends ClassicEditorBase { }
 
@@ -31,6 +31,8 @@ ClassicEditor.builtinPlugins = [
     Autoformat,
     AutoImage,
     Bold,
+    Subscript,
+    Superscript,
     Underline,
     Essentials,
     FontSize,
