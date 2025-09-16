@@ -1,4 +1,5 @@
 import ClassicEditorBase from '@ckeditor/ckeditor5-editor-classic/src/classiceditor';
+import { WordCount } from '@ckeditor/ckeditor5-word-count';
 import Essentials from '@ckeditor/ckeditor5-essentials/src/essentials';
 import Alignment from '@ckeditor/ckeditor5-alignment/src/alignment';
 import Autoformat from '@ckeditor/ckeditor5-autoformat/src/autoformat';
@@ -22,8 +23,42 @@ import SimpleUploadAdapter from "@ckeditor/ckeditor5-upload/src/adapters/simpleu
 import 'mathlive';
 import { Mathlive, MathlivePanelview } from '@yayure/ckeditor5-mathlive';
 import { Underline, Bold, Italic, Subscript, Superscript } from '@ckeditor/ckeditor5-basic-styles';
+import ClassicImageResize from '@emagtechlabs/ckeditor5-classic-image-resize';
 
-class ClassicEditor extends ClassicEditorBase { }
+class ClassicEditor extends ClassicEditorBase {
+    static create(element, config = {}) {
+        config.wordCount = config.wordCount || {};
+        const userOnUpdate = config.wordCount.onUpdate;
+
+        config.wordCount.onUpdate = stats => {
+            // Ambil wrapper editor yg dibuat setelah textarea
+            const editorWrapper = element.nextElementSibling;
+            if (!editorWrapper) return;
+
+            // Cari atau buat elemen wordcount setelah editor
+            let wrapper = editorWrapper.nextElementSibling;
+            if (!wrapper || !wrapper.classList.contains('ck-wordcount')) {
+                wrapper = document.createElement('div');
+                wrapper.classList.add('ck-wordcount');
+
+                // Sisipkan setelah editor wrapper
+                editorWrapper.parentNode.insertBefore(wrapper, editorWrapper.nextSibling);
+            }
+
+            // Update isi wordcount
+            wrapper.innerHTML = `
+                <span style="margin-right:12px;">📝 Kata: ${stats.words}</span>
+                <span>🔡 Karakter: ${stats.characters}</span>
+            `;
+
+            if (typeof userOnUpdate === 'function') {
+                userOnUpdate(stats);
+            }
+        };
+
+        return super.create(element, config);
+    }
+}
 
 ClassicEditor.builtinPlugins = [
     Image,
@@ -68,7 +103,9 @@ ClassicEditor.builtinPlugins = [
     TableToolbar,
     TextTransformation,
     Underline,
-    Mathlive
+    Mathlive,
+    ClassicImageResize,
+    WordCount
 ];
 
 ClassicEditor.defaultConfig = {
@@ -78,6 +115,7 @@ ClassicEditor.defaultConfig = {
             '|',
             'heading',
             'fontSize',
+            'alignment',
             '|',
             'bold',
             'italic',
@@ -92,7 +130,8 @@ ClassicEditor.defaultConfig = {
             'mathlive',
             '|',
             'undo',
-            'redo'
+            'redo',
+            'fullscreen'
         ],
         shouldNotGroupWhenFull: false
     },
@@ -155,7 +194,10 @@ ClassicEditor.defaultConfig = {
             'imageStyle:wrapText',
             'imageStyle:breakText',
             '|',
-            'resizeImage'
+            'imageSize:lockAspectRatio',
+            'imageSize:width',
+            'imageSize:height',
+            'resizeImage:custom',
         ]
     },
     licenseKey: 'GPL',
@@ -191,7 +233,7 @@ ClassicEditor.defaultConfig = {
                 panelView = null;
             }
         }
-    },
+    }
 };
 
 // Pastikan ekspor dilakukan dengan benar
