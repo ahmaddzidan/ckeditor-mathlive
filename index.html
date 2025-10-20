@@ -1,48 +1,215 @@
 <!DOCTYPE html>
 <html lang="en">
-
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CKEditor 5 with MathLive</title>
-    <link rel="stylesheet" href="https://unpkg.com/mathlive/dist/mathlive-static.css" />
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CKEditor Test - Image Resize & Alignment</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/mathlive/dist/mathlive-static.css"
+    />
     <script defer src="https://unpkg.com/mathlive"></script>
     <script src="build/ckeditor_classic.js"></script>
     <style>
-        .ck-wordcount {
-            width: 100%;
-            box-sizing: border-box;
-            font-size: 13px;
-            padding: 6px 10px;
-            background: #fff;
-            /* sama dengan background editor */
-            border: 1px solid #ddd;
-            border-top: none;
-            /* hilangkan garis atas */
-            border-radius: 0 0 6px 6px;
-            /* sudut bawah menyatu */
-            color: #333;
-            display: flex;
-            justify-content: flex-end;
-            /* teks rata kanan */
-            gap: 16px;
-            font-family: Arial, sans-serif;
+      .ck-wordcount {
+        width: 100%;
+        box-sizing: border-box;
+        font-size: 13px;
+        padding: 6px 10px;
+        background: #fff;
+        border: 1px solid #ddd;
+        border-top: none;
+        border-radius: 0 0 6px 6px;
+        color: #333;
+        display: flex;
+        justify-content: flex-end;
+        gap: 16px;
+        font-family: Arial, sans-serif;
+      }
+
+      .test-section {
+        margin: 20px 0;
+        padding: 20px;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+      }
+
+      .output-preview {
+        background: #f8f9fa;
+        padding: 15px;
+        border-radius: 6px;
+        margin-top: 15px;
+      }
+
+      /* Bootstrap-compatible image alignment styles */
+      .img-custom-size {
+        max-width: 100%;
+        height: auto;
+      }
+
+      .img-aligned.d-block.mx-auto {
+        display: block !important;
+        margin-left: auto !important;
+        margin-right: auto !important;
+      }
+
+      .img-aligned.d-block.ms-auto {
+        display: block !important;
+        margin-left: auto !important;
+      }
+
+      .img-aligned.d-block {
+        display: block !important;
+      }
+
+      /* CKEditor Image Style Alignment */
+      .ck-content .image.image-style-align-left {
+        text-align: left;
+        float: none;
+        margin-right: auto;
+        margin-left: 0;
+      }
+
+      .ck-content .image.image-style-align-center {
+        text-align: center;
+        margin-left: auto;
+        margin-right: auto;
+        display: block;
+      }
+
+      .ck-content .image.image-style-align-right {
+        text-align: right;
+        float: none;
+        margin-left: auto;
+        margin-right: 0;
+      }
+      @media (max-width: 576px) {
+        .img-custom-size {
+          max-width: 100% !important;
+          width: auto !important;
         }
+      }
     </style>
-</head>
+  </head>
+  <body>
+    <div class="container-fluid">
+      <div class="row">
+        <div class="col-md-12">
+          <h1 class="mb-4">🧪 CKEditor Image Resize & Alignment Test</h1>
 
-<body>
-    <textarea id="editor"></textarea>
+          <div class="test-section">
+            <h3>📝 Editor</h3>
+            <p>Test image upload, resize, dan alignment controls:</p>
+            <textarea id="editor"></textarea>
+          </div>
+
+          <div class="test-section">
+            <h3>👀 Preview Output</h3>
+            <p>HTML output dari editor (real-time):</p>
+            <div id="preview" class="output-preview"></div>
+          </div>
+
+          <div class="test-section">
+            <h3>📋 Instructions</h3>
+            <ol>
+              <li>Upload atau paste gambar di editor</li>
+              <li>Klik gambar untuk show toolbar</li>
+              <li>Test alignment buttons: Left, Center, Right</li>
+              <li>Test resize: Width, Height, Lock Aspect Ratio</li>
+              <li>Lihat preview untuk memastikan alignment konsisten</li>
+            </ol>
+          </div>
+
+          <div class="test-section">
+            <h3>✅ Test Cases</h3>
+            <div class="row">
+              <div class="col-md-4">
+                <h5>Left Align</h5>
+                <div class="border p-2">
+                  <figure
+                    class="image d-block img-aligned img-custom-size"
+                    style="--img-width: 150px; width: var(--img-width)"
+                  >
+                    <img
+                      src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='100'%3E%3Crect width='100%25' height='100%25' fill='%230066cc'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='white' font-family='Arial' font-size='16'%3ELEFT%3C/text%3E%3C/svg%3E"
+                      style="width: var(--img-width)"
+                    />
+                  </figure>
+                </div>
+              </div>
+              <div class="col-md-4">
+                <h5>Center Align</h5>
+                <div class="border p-2">
+                  <figure
+                    class="image d-block mx-auto img-aligned img-custom-size"
+                    style="--img-width: 150px; width: var(--img-width)"
+                  >
+                    <img
+                      src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='100'%3E%3Crect width='100%25' height='100%25' fill='%2300cc66'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='white' font-family='Arial' font-size='16'%3ECENTER%3C/text%3E%3C/svg%3E"
+                      style="width: var(--img-width)"
+                    />
+                  </figure>
+                </div>
+              </div>
+              <div class="col-md-4">
+                <h5>Right Align</h5>
+                <div class="border p-2">
+                  <figure
+                    class="image d-block ms-auto img-aligned img-custom-size"
+                    style="--img-width: 150px; width: var(--img-width)"
+                  >
+                    <img
+                      src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='100'%3E%3Crect width='100%25' height='100%25' fill='%23cc6600'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='white' font-family='Arial' font-size='16'%3ERIGHT%3C/text%3E%3C/svg%3E"
+                      style="width: var(--img-width)"
+                    />
+                  </figure>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <script>
-        ClassicEditor
-            .create(document.querySelector('#editor'), {
-                licenseKey: 'GPL',
-            })
-            .catch(error => {
-                console.error(error);
-            });
+      let editor;
 
+      ClassicEditor.create(document.querySelector("#editor"), {
+        licenseKey: "GPL",
+        simpleUpload: {
+          uploadUrl: "https://httpbin.org/post",
+        },
+      })
+        .then((editorInstance) => {
+          editor = editorInstance;
+
+          // Update preview in real-time
+          editor.model.document.on("change:data", () => {
+            document.getElementById("preview").innerHTML = editor.getData();
+          });
+
+          // Add some sample content
+          editor.setData(`
+                    <h2>Sample Content for Testing</h2>
+                    <p>Upload atau paste gambar di sini, lalu test alignment dan resize controls.</p>
+                    <p>Gambar sample (paste ini ke editor untuk test cepat):</p>
+                    <figure class="image">
+                        <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='200'%3E%3Crect width='100%25' height='100%25' fill='%234CAF50'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='white' font-family='Arial' font-size='20'%3ESample Image%3C/text%3E%3C/svg%3E" alt="Sample">
+                    </figure>
+                `);
+
+          console.log("✅ CKEditor loaded successfully!");
+        })
+        .catch((error) => {
+          console.error("❌ CKEditor error:", error);
+          document.getElementById(
+            "preview"
+          ).innerHTML = `<div class="alert alert-danger">Error: ${error.message}</div>`;
+        });
     </script>
-</body>
-
+  </body>
 </html>

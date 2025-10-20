@@ -28,7 +28,6 @@
     "mathlive": "^0.104.0"
   },
   "devDependencies": {
-    "@edsdk/flmngr-ckeditor5": "^1.0.9",
     "webpack": "^5.98.0",
     "webpack-cli": "^6.0.1"
   }
