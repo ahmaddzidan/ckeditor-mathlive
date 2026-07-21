@@ -1,12 +1,19 @@
 import ClassicEditorBase from "@ckeditor/ckeditor5-editor-classic/src/classiceditor";
+import Plugin from "@ckeditor/ckeditor5-core/src/plugin";
 import { WordCount } from "@ckeditor/ckeditor5-word-count";
 import Essentials from "@ckeditor/ckeditor5-essentials/src/essentials";
 import Alignment from "@ckeditor/ckeditor5-alignment/src/alignment";
 import Autoformat from "@ckeditor/ckeditor5-autoformat/src/autoformat";
 import Heading from "@ckeditor/ckeditor5-heading/src/heading";
-import Link from "@ckeditor/ckeditor5-link/src/link";
 import List from "@ckeditor/ckeditor5-list/src/list";
 import Paragraph from "@ckeditor/ckeditor5-paragraph/src/paragraph";
+import BlockQuote from "@ckeditor/ckeditor5-block-quote/src/blockquote";
+import HorizontalLine from "@ckeditor/ckeditor5-horizontal-line/src/horizontalline";
+import FindAndReplace from "@ckeditor/ckeditor5-find-and-replace/src/findandreplace";
+import SpecialCharacters from "@ckeditor/ckeditor5-special-characters/src/specialcharacters";
+import SpecialCharactersEssentials from "@ckeditor/ckeditor5-special-characters/src/specialcharactersessentials";
+import SpecialCharactersMathematical from "@ckeditor/ckeditor5-special-characters/src/specialcharactersmathematical";
+import SpecialCharactersText from "@ckeditor/ckeditor5-special-characters/src/specialcharacterstext";
 import {
   Table,
   TableToolbar,
@@ -23,14 +30,12 @@ import {
   ImageUpload,
   ImageResize,
   ImageInsert,
-  AutoImage,
   ImageBlock,
   ImageInline,
-  ImageInsertViaUrl,
   ImageTextAlternative,
 } from "@ckeditor/ckeditor5-image";
 import TextTransformation from "@ckeditor/ckeditor5-typing/src/texttransformation";
-import PasteFromOffice from "@ckeditor/ckeditor5-paste-from-office/src/pastefromoffice";
+import ClipboardPipeline from "@ckeditor/ckeditor5-clipboard/src/clipboardpipeline";
 import RemoveFormat from "@ckeditor/ckeditor5-remove-format/src/removeformat";
 import SourceEditing from "@ckeditor/ckeditor5-source-editing/src/sourceediting";
 import FontSize from "@ckeditor/ckeditor5-font/src/fontsize";
@@ -49,10 +54,566 @@ import {
   Subscript,
   Superscript,
 } from "@ckeditor/ckeditor5-basic-styles";
-import ClassicImageResize from "@emagtechlabs/ckeditor5-classic-image-resize";
+// import ClassicImageResize from "@emagtechlabs/ckeditor5-classic-image-resize";
+
+const IMAGE_ALIGNMENT_CLASSES = [
+  "float-start",
+  "mx-auto",
+  "d-block",
+  "float-end",
+  "image-style-align-left",
+  "image-style-align-center",
+  "image-style-align-right",
+];
+
+const EXAM_TOOLBAR_ITEMS = [
+  "sourceEditing",
+  "|",
+  "heading",
+  "fontSize",
+  "alignment",
+  "|",
+  "bold",
+  "italic",
+  "underline",
+  "subscript",
+  "superscript",
+  "specialCharacters",
+  "|",
+  "outdent",
+  "indent",
+  "bulletedList",
+  "numberedList",
+  "|",
+  "insertTable",
+  "imageUpload",
+  "mathlive",
+  "horizontalLine",
+  "blockQuote",
+  "removeFormat",
+  "|",
+  "findAndReplace",
+  "undo",
+  "redo",
+];
+
+const FULL_TOOLBAR_ITEMS = [
+  "sourceEditing",
+  "|",
+  "heading",
+  "fontSize",
+  "alignment",
+  "|",
+  "bold",
+  "italic",
+  "underline",
+  "subscript",
+  "superscript",
+  "specialCharacters",
+  "|",
+  "outdent",
+  "indent",
+  "bulletedList",
+  "numberedList",
+  "|",
+  "insertTable",
+  "imageUpload",
+  "mathlive",
+  "horizontalLine",
+  "blockQuote",
+  "removeFormat",
+  "|",
+  "findAndReplace",
+  "undo",
+  "redo",
+];
+
+function escapeHtml(value) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function plainTextToHtml(text) {
+  const normalized = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  const paragraphs = normalized.split("\n");
+
+  return paragraphs
+    .map((line) =>
+      line.length ? `<p>${escapeHtml(line)}</p>` : "<p>&nbsp;</p>",
+    )
+    .join("");
+}
+
+const IMAGE_ALIGNMENT_STYLES = {
+  alignBlockLeft: {
+    display: "table",
+    "margin-left": "0",
+    "margin-right": "auto",
+  },
+  alignCenter: {
+    display: "table",
+    "margin-left": "auto",
+    "margin-right": "auto",
+  },
+  alignBlockRight: {
+    display: "table",
+    "margin-left": "auto",
+    "margin-right": "0",
+  },
+};
+
+function getAlignmentFromClasses(classList) {
+  if (
+    classList.contains("float-start") ||
+    classList.contains("image-style-align-left")
+  ) {
+    return "alignBlockLeft";
+  }
+
+  if (
+    classList.contains("mx-auto") ||
+    classList.contains("image-style-align-center")
+  ) {
+    return "alignCenter";
+  }
+
+  if (
+    classList.contains("float-end") ||
+    classList.contains("image-style-align-right")
+  ) {
+    return "alignBlockRight";
+  }
+
+  return null;
+}
+
+function normalizeImageDimension(value) {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  if (typeof value === "number") {
+    return `${value}px`;
+  }
+
+  if (/^\d+(?:\.\d+)?$/.test(value)) {
+    return `${value}px`;
+  }
+
+  return value;
+}
+
+function pixelValueFromDimension(value) {
+  if (!value) {
+    return null;
+  }
+
+  const match = String(value).match(/^(\d+(?:\.\d+)?)px$/);
+
+  if (!match) {
+    return null;
+  }
+
+  return String(Math.round(Number(match[1])));
+}
+
+function inferPixelWidthFromImage(image) {
+  if (!image) {
+    return null;
+  }
+
+  const widthAttr = image.getAttribute("width");
+
+  if (/^\d+(?:\.\d+)?$/.test(widthAttr || "")) {
+    return `${Math.round(Number(widthAttr))}px`;
+  }
+
+  const heightAttr = image.getAttribute("height");
+  const aspectRatio = image.style.aspectRatio || "";
+  const ratioMatch = aspectRatio.match(
+    /^(\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?)$/,
+  );
+
+  if (ratioMatch && /^\d+(?:\.\d+)?$/.test(heightAttr || "")) {
+    const ratioWidth = Number(ratioMatch[1]);
+    const ratioHeight = Number(ratioMatch[2]);
+    const imgHeight = Number(heightAttr);
+
+    if (ratioHeight > 0 && imgHeight > 0) {
+      const computedWidth = (ratioWidth / ratioHeight) * imgHeight;
+      return `${Math.round(computedWidth)}px`;
+    }
+  }
+
+  return null;
+}
+
+function resolveStandaloneFigureWidth(figure, image) {
+  const styleWidth = (figure.style.width || "").trim();
+
+  if (styleWidth && styleWidth !== "100%") {
+    return styleWidth;
+  }
+
+  const inferredPixelWidth = inferPixelWidthFromImage(image);
+
+  if (inferredPixelWidth) {
+    return inferredPixelWidth;
+  }
+
+  return styleWidth || "fit-content";
+}
+
+function clearStandaloneImageAlignmentStyles(writer, element) {
+  for (const styleName of [
+    "display",
+    "width",
+    "max-width",
+    "margin-left",
+    "margin-right",
+  ]) {
+    writer.removeStyle(styleName, element);
+  }
+}
+
+function applyStandaloneImageAlignment(
+  writer,
+  element,
+  imageStyle,
+  modelImage,
+) {
+  clearStandaloneImageAlignmentStyles(writer, element);
+
+  for (const className of IMAGE_ALIGNMENT_CLASSES) {
+    writer.removeClass(className, element);
+  }
+
+  writer.removeClass("image_resized", element);
+
+  const resizedWidth = normalizeImageDimension(
+    modelImage.getAttribute("resizedWidth"),
+  );
+  const naturalWidth = normalizeImageDimension(
+    modelImage.getAttribute("width"),
+  );
+
+  const resizedWidthInPixels = pixelValueFromDimension(resizedWidth);
+  const exportWidth = resizedWidthInPixels
+    ? resizedWidth
+    : naturalWidth || resizedWidth;
+
+  if (exportWidth) {
+    writer.setStyle("width", exportWidth, element);
+  } else {
+    writer.setStyle("width", "fit-content", element);
+  }
+
+  writer.setStyle("max-width", "100%", element);
+
+  const styles = IMAGE_ALIGNMENT_STYLES[imageStyle];
+
+  if (!styles) {
+    return;
+  }
+
+  for (const [styleName, value] of Object.entries(styles)) {
+    writer.setStyle(styleName, value, element);
+  }
+}
+
+function getStandaloneImageAlignment(viewElement) {
+  const display = viewElement.getStyle("display");
+  const marginLeft = viewElement.getStyle("margin-left");
+  const marginRight = viewElement.getStyle("margin-right");
+
+  if (display !== "table") {
+    return null;
+  }
+
+  if ((marginLeft === "0" || marginLeft === "0px") && marginRight === "auto") {
+    return "alignBlockLeft";
+  }
+
+  if (marginLeft === "auto" && marginRight === "auto") {
+    return "alignCenter";
+  }
+
+  if (marginLeft === "auto" && (marginRight === "0" || marginRight === "0px")) {
+    return "alignBlockRight";
+  }
+
+  return null;
+}
+
+function getStandaloneImageAlignmentFromFigure(figure) {
+  const display = figure.style.display;
+  const marginLeft = figure.style.marginLeft;
+  const marginRight = figure.style.marginRight;
+
+  if (display === "table") {
+    if (
+      (marginLeft === "0" || marginLeft === "0px") &&
+      marginRight === "auto"
+    ) {
+      return "alignBlockLeft";
+    }
+
+    if (marginLeft === "auto" && marginRight === "auto") {
+      return "alignCenter";
+    }
+
+    if (
+      marginLeft === "auto" &&
+      (marginRight === "0" || marginRight === "0px")
+    ) {
+      return "alignBlockRight";
+    }
+  }
+
+  return getAlignmentFromClasses(figure.classList);
+}
+
+function normalizeStandaloneHtml(html) {
+  const template = document.createElement("template");
+  template.innerHTML = html;
+
+  // Strictly remove links and external references from exported question HTML.
+  const anchors = template.content.querySelectorAll("a");
+  for (const anchor of anchors) {
+    const replacement = document.createTextNode(anchor.textContent || "");
+    anchor.replaceWith(replacement);
+  }
+
+  const images = template.content.querySelectorAll("img");
+  for (const image of images) {
+    const src = image.getAttribute("src") || "";
+    const isExternalSource = /^https?:\/\//i.test(src) || /^\/\//.test(src);
+
+    if (isExternalSource) {
+      image.removeAttribute("src");
+      image.removeAttribute("srcset");
+    }
+  }
+
+  const figures = template.content.querySelectorAll("figure.image");
+
+  for (const figure of figures) {
+    const image = figure.querySelector("img");
+    const alignment =
+      getStandaloneImageAlignmentFromFigure(figure) || "alignBlockLeft";
+    const figureWidth = resolveStandaloneFigureWidth(figure, image);
+
+    for (const className of IMAGE_ALIGNMENT_CLASSES) {
+      figure.classList.remove(className);
+    }
+
+    figure.classList.remove("image_resized");
+    figure.style.display = "table";
+    figure.style.maxWidth = "100%";
+    figure.style.width = figureWidth;
+
+    if (alignment === "alignCenter") {
+      figure.style.marginLeft = "auto";
+      figure.style.marginRight = "auto";
+    } else if (alignment === "alignBlockRight") {
+      figure.style.marginLeft = "auto";
+      figure.style.marginRight = "0";
+    } else {
+      figure.style.marginLeft = "0";
+      figure.style.marginRight = "auto";
+    }
+
+    if (!image) {
+      continue;
+    }
+
+    image.style.display = "block";
+    image.style.maxWidth = "100%";
+    image.style.height = "auto";
+
+    const figureWidthInPixels = pixelValueFromDimension(figureWidth);
+
+    if (figureWidth !== "fit-content") {
+      image.style.width = "100%";
+
+      if (figureWidthInPixels) {
+        image.setAttribute("width", figureWidthInPixels);
+      } else {
+        image.removeAttribute("width");
+      }
+    } else {
+      image.style.removeProperty("width");
+      image.removeAttribute("width");
+    }
+  }
+
+  return template.innerHTML;
+}
+
+class StandaloneImageAlignment extends Plugin {
+  afterInit() {
+    const { editor } = this;
+    const imageUtils = editor.plugins.get("ImageUtils");
+
+    editor.conversion.for("dataDowncast").add((dispatcher) => {
+      const syncAlignment = (evt, data, conversionApi) => {
+        if (!data.item.is("element", "imageBlock")) {
+          return;
+        }
+
+        const figure = conversionApi.mapper.toViewElement(data.item);
+
+        if (!figure) {
+          return;
+        }
+
+        applyStandaloneImageAlignment(
+          conversionApi.writer,
+          figure,
+          data.item.getAttribute("imageStyle"),
+          data.item,
+        );
+
+        const image = imageUtils.findViewImgElement(figure);
+
+        if (!image) {
+          return;
+        }
+
+        conversionApi.writer.setStyle("display", "block", image);
+        conversionApi.writer.setStyle("max-width", "100%", image);
+        conversionApi.writer.setStyle("height", "auto", image);
+
+        const resizedWidth = normalizeImageDimension(
+          data.item.getAttribute("resizedWidth"),
+        );
+        const naturalWidth = normalizeImageDimension(
+          data.item.getAttribute("width"),
+        );
+        const exportWidth = resizedWidth || naturalWidth;
+        const exportWidthInPixels = pixelValueFromDimension(exportWidth);
+
+        if (exportWidth) {
+          conversionApi.writer.setStyle("width", "100%", image);
+
+          if (exportWidthInPixels) {
+            conversionApi.writer.setAttribute(
+              "width",
+              exportWidthInPixels,
+              image,
+            );
+          } else {
+            conversionApi.writer.removeAttribute("width", image);
+          }
+        } else {
+          conversionApi.writer.removeStyle("width", image);
+          conversionApi.writer.removeAttribute("width", image);
+        }
+      };
+
+      dispatcher.on("insert:imageBlock", syncAlignment, { priority: "low" });
+      dispatcher.on("attribute:imageStyle:imageBlock", syncAlignment, {
+        priority: "low",
+      });
+      dispatcher.on("attribute:width:imageBlock", syncAlignment, {
+        priority: "low",
+      });
+      dispatcher.on("attribute:height:imageBlock", syncAlignment, {
+        priority: "low",
+      });
+      dispatcher.on("attribute:resizedWidth:imageBlock", syncAlignment, {
+        priority: "low",
+      });
+    });
+
+    editor.conversion.for("upcast").add((dispatcher) => {
+      dispatcher.on(
+        "element:figure",
+        (evt, data, conversionApi) => {
+          if (!data.modelRange) {
+            return;
+          }
+
+          const [modelElement] = Array.from(
+            data.modelRange.getItems({
+              shallow: true,
+            }),
+          );
+
+          if (
+            !modelElement ||
+            !modelElement.is("element", "imageBlock") ||
+            !conversionApi.schema.checkAttribute(modelElement, "imageStyle")
+          ) {
+            return;
+          }
+
+          const imageStyle = getStandaloneImageAlignment(data.viewItem);
+
+          if (!imageStyle) {
+            return;
+          }
+
+          conversionApi.writer.setAttribute(
+            "imageStyle",
+            imageStyle,
+            modelElement,
+          );
+        },
+        { priority: "low" },
+      );
+    });
+  }
+}
+
+class ForcePlainTextPaste extends Plugin {
+  static get requires() {
+    return [ClipboardPipeline];
+  }
+
+  afterInit() {
+    const { editor } = this;
+
+    editor.plugins.get("ClipboardPipeline").on(
+      "inputTransformation",
+      (evt, data) => {
+        const forcePlainTextPaste = editor.config.get("forcePlainTextPaste");
+
+        if (!forcePlainTextPaste || !data.dataTransfer) {
+          return;
+        }
+
+        const plainText = data.dataTransfer.getData("text/plain");
+
+        if (!plainText) {
+          return;
+        }
+
+        data.content = editor.data.processor.toView(plainTextToHtml(plainText));
+      },
+      { priority: "highest" },
+    );
+  }
+}
 
 class ClassicEditor extends ClassicEditorBase {
   static create(element, config = {}) {
+    const toolbarProfile = config.toolbarProfile || "exam";
+
+    if (!config.toolbar || !Array.isArray(config.toolbar.items)) {
+      config.toolbar = {
+        ...(config.toolbar || {}),
+        items:
+          toolbarProfile === "full"
+            ? [...FULL_TOOLBAR_ITEMS]
+            : [...EXAM_TOOLBAR_ITEMS],
+      };
+    }
+
     config.wordCount = config.wordCount || {};
     const userOnUpdate = config.wordCount.onUpdate;
 
@@ -70,7 +631,7 @@ class ClassicEditor extends ClassicEditorBase {
         // Sisipkan setelah editor wrapper
         editorWrapper.parentNode.insertBefore(
           wrapper,
-          editorWrapper.nextSibling
+          editorWrapper.nextSibling,
         );
       }
 
@@ -85,7 +646,17 @@ class ClassicEditor extends ClassicEditorBase {
       }
     };
 
-    return super.create(element, config);
+    return super.create(element, config).then((editor) => {
+      const originalGetData = editor.getData.bind(editor);
+
+      editor.getData = (...args) =>
+        normalizeStandaloneHtml(originalGetData(...args));
+
+      editor.getStandaloneData = (...args) =>
+        normalizeStandaloneHtml(originalGetData(...args));
+
+      return editor;
+    });
   }
 }
 
@@ -93,8 +664,9 @@ ClassicEditor.builtinPlugins = [
   Image,
   Alignment,
   Autoformat,
-  AutoImage,
+  BlockQuote,
   Bold,
+  FindAndReplace,
   Subscript,
   Superscript,
   Underline,
@@ -105,23 +677,27 @@ ClassicEditor.builtinPlugins = [
   ImageCaption,
   ImageInline,
   ImageInsert,
-  ImageInsertViaUrl,
   ImageResize,
   ImageStyle,
   ImageTextAlternative,
   ImageToolbar,
   ImageUpload,
   GeneralHtmlSupport,
+  StandaloneImageAlignment,
+  ForcePlainTextPaste,
   Indent,
   IndentBlock,
   Italic,
-  Link,
   List,
   ListProperties,
+  HorizontalLine,
   MediaEmbed,
   Paragraph,
-  PasteFromOffice,
   RemoveFormat,
+  SpecialCharacters,
+  SpecialCharactersEssentials,
+  SpecialCharactersMathematical,
+  SpecialCharactersText,
   SimpleUploadAdapter,
   SourceEditing,
   Table,
@@ -133,34 +709,15 @@ ClassicEditor.builtinPlugins = [
   TextTransformation,
   Underline,
   Mathlive,
-  ClassicImageResize,
+  // ClassicImageResize,
   WordCount,
 ];
 
 ClassicEditor.defaultConfig = {
+  forcePlainTextPaste: true,
+  toolbarProfile: "exam",
   toolbar: {
-    items: [
-      "sourceEditing",
-      "|",
-      "heading",
-      "fontSize",
-      "alignment",
-      "|",
-      "bold",
-      "italic",
-      "underline",
-      "bulletedList",
-      "numberedList",
-      "removeFormat",
-      "|",
-      "insertTable",
-      "imageUpload",
-      "|",
-      "mathlive",
-      "|",
-      "undo",
-      "redo",
-    ],
+    items: EXAM_TOOLBAR_ITEMS,
     shouldNotGroupWhenFull: false,
   },
   language: "en",
@@ -215,18 +772,66 @@ ClassicEditor.defaultConfig = {
   },
   image: {
     resizeUnit: "px",
+    resizeOptions: [
+      {
+        name: "resizeImage:160",
+        value: "160",
+        label: "160 px",
+      },
+      {
+        name: "resizeImage:240",
+        value: "240",
+        label: "240 px",
+      },
+      {
+        name: "resizeImage:320",
+        value: "320",
+        label: "320 px",
+      },
+      {
+        name: "resizeImage:480",
+        value: "480",
+        label: "480 px",
+      },
+      {
+        name: "resizeImage:640",
+        value: "640",
+        label: "640 px",
+      },
+      {
+        name: "resizeImage:800",
+        value: "800",
+        label: "800 px",
+      },
+      {
+        name: "resizeImage:960",
+        value: "960",
+        label: "960 px",
+      },
+      {
+        name: "resizeImage:1200",
+        value: "1200",
+        label: "1200 px",
+      },
+      {
+        name: "resizeImage:custom",
+        value: "custom",
+        label: "Custom",
+      },
+      {
+        name: "resizeImage:original",
+        value: null,
+        label: "Original",
+      },
+    ],
     toolbar: [
       "toggleImageCaption",
       "imageTextAlternative",
+      "resizeImage",
       "|",
       "imageStyle:alignBlockLeft",
       "imageStyle:alignCenter",
       "imageStyle:alignBlockRight",
-      "|",
-      "imageSize:lockAspectRatio",
-      "imageSize:width",
-      "imageSize:height",
-      "resizeImage:custom",
     ],
     styles: {
       options: [
@@ -252,19 +857,6 @@ ClassicEditor.defaultConfig = {
     },
   },
   licenseKey: "GPL",
-  link: {
-    addTargetToExternalLinks: true,
-    defaultProtocol: "https://",
-    decorators: {
-      toggleDownloadable: {
-        mode: "manual",
-        label: "Downloadable",
-        attributes: {
-          download: "file",
-        },
-      },
-    },
-  },
   list: {
     properties: {
       styles: true,

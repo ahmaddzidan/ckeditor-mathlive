@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -45,48 +45,15 @@
         margin-top: 15px;
       }
 
-      /* Bootstrap-compatible image alignment styles */
       .img-custom-size {
         max-width: 100%;
         height: auto;
       }
 
-      .img-aligned.d-block.mx-auto {
-        display: block !important;
-        margin-left: auto !important;
-        margin-right: auto !important;
+      .standalone-image-example {
+        display: table;
       }
 
-      .img-aligned.d-block.ms-auto {
-        display: block !important;
-        margin-left: auto !important;
-      }
-
-      .img-aligned.d-block {
-        display: block !important;
-      }
-
-      /* CKEditor Image Style Alignment */
-      .ck-content .image.image-style-align-left {
-        text-align: left;
-        float: none;
-        margin-right: auto;
-        margin-left: 0;
-      }
-
-      .ck-content .image.image-style-align-center {
-        text-align: center;
-        margin-left: auto;
-        margin-right: auto;
-        display: block;
-      }
-
-      .ck-content .image.image-style-align-right {
-        text-align: right;
-        float: none;
-        margin-left: auto;
-        margin-right: 0;
-      }
       @media (max-width: 576px) {
         .img-custom-size {
           max-width: 100% !important;
@@ -103,13 +70,19 @@
 
           <div class="test-section">
             <h3>📝 Editor</h3>
-            <p>Test image upload, resize, dan alignment controls:</p>
+            <p>
+              Test image upload, resize, dan alignment controls dengan output
+              inline style standalone:
+            </p>
             <textarea id="editor"></textarea>
           </div>
 
           <div class="test-section">
             <h3>👀 Preview Output</h3>
-            <p>HTML output dari editor (real-time):</p>
+            <p>
+              HTML output dari editor (real-time, tanpa ketergantungan class
+              alignment):
+            </p>
             <div id="preview" class="output-preview"></div>
           </div>
 
@@ -131,8 +104,13 @@
                 <h5>Left Align</h5>
                 <div class="border p-2">
                   <figure
-                    class="image d-block img-aligned img-custom-size"
-                    style="--img-width: 150px; width: var(--img-width)"
+                    class="image img-custom-size standalone-image-example"
+                    style="
+                      --img-width: 150px;
+                      width: var(--img-width);
+                      margin-left: 0;
+                      margin-right: auto;
+                    "
                   >
                     <img
                       src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='100'%3E%3Crect width='100%25' height='100%25' fill='%230066cc'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='white' font-family='Arial' font-size='16'%3ELEFT%3C/text%3E%3C/svg%3E"
@@ -145,8 +123,13 @@
                 <h5>Center Align</h5>
                 <div class="border p-2">
                   <figure
-                    class="image d-block mx-auto img-aligned img-custom-size"
-                    style="--img-width: 150px; width: var(--img-width)"
+                    class="image img-custom-size standalone-image-example"
+                    style="
+                      --img-width: 150px;
+                      width: var(--img-width);
+                      margin-left: auto;
+                      margin-right: auto;
+                    "
                   >
                     <img
                       src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='100'%3E%3Crect width='100%25' height='100%25' fill='%2300cc66'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='white' font-family='Arial' font-size='16'%3ECENTER%3C/text%3E%3C/svg%3E"
@@ -159,8 +142,13 @@
                 <h5>Right Align</h5>
                 <div class="border p-2">
                   <figure
-                    class="image d-block ms-auto img-aligned img-custom-size"
-                    style="--img-width: 150px; width: var(--img-width)"
+                    class="image img-custom-size standalone-image-example"
+                    style="
+                      --img-width: 150px;
+                      width: var(--img-width);
+                      margin-left: auto;
+                      margin-right: 0;
+                    "
                   >
                     <img
                       src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='100'%3E%3Crect width='100%25' height='100%25' fill='%23cc6600'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='white' font-family='Arial' font-size='16'%3ERIGHT%3C/text%3E%3C/svg%3E"
@@ -181,7 +169,7 @@
       ClassicEditor.create(document.querySelector("#editor"), {
         licenseKey: "GPL",
         simpleUpload: {
-          uploadUrl: "https://httpbin.org/post",
+          uploadUrl: "/upload-image",
         },
       })
         .then((editorInstance) => {
@@ -189,7 +177,12 @@
 
           // Update preview in real-time
           editor.model.document.on("change:data", () => {
-            document.getElementById("preview").innerHTML = editor.getData();
+            const html =
+              typeof editor.getStandaloneData === "function"
+                ? editor.getStandaloneData()
+                : editor.getData();
+
+            document.getElementById("preview").innerHTML = html;
           });
 
           // Add some sample content
@@ -206,9 +199,8 @@
         })
         .catch((error) => {
           console.error("❌ CKEditor error:", error);
-          document.getElementById(
-            "preview"
-          ).innerHTML = `<div class="alert alert-danger">Error: ${error.message}</div>`;
+          document.getElementById("preview").innerHTML =
+            `<div class="alert alert-danger">Error: ${error.message}</div>`;
         });
     </script>
   </body>
