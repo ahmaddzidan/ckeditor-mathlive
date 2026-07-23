@@ -377,9 +377,111 @@ function getStandaloneImageAlignmentFromFigure(figure) {
   return getAlignmentFromClasses(figure.classList);
 }
 
-function normalizeStandaloneHtml(html) {
+function normalizeImageSecurityPolicy(policy = {}) {
+  const defaultPolicy = {
+    allowExternalImages: false,
+    allowedExternalHosts: [],
+    allowedExternalUrlPrefixes: [],
+    allowedExternalUrlPatterns: [],
+  };
+
+  const mergedPolicy = {
+    ...defaultPolicy,
+    ...policy,
+  };
+
+  return {
+    ...mergedPolicy,
+    allowedExternalHosts: Array.isArray(mergedPolicy.allowedExternalHosts)
+      ? mergedPolicy.allowedExternalHosts
+          .map((host) => String(host).trim().toLowerCase())
+          .filter(Boolean)
+      : [],
+    allowedExternalUrlPrefixes: Array.isArray(
+      mergedPolicy.allowedExternalUrlPrefixes,
+    )
+      ? mergedPolicy.allowedExternalUrlPrefixes
+          .map((prefix) => String(prefix).trim())
+          .filter(Boolean)
+      : [],
+    allowedExternalUrlPatterns: Array.isArray(
+      mergedPolicy.allowedExternalUrlPatterns,
+    )
+      ? mergedPolicy.allowedExternalUrlPatterns.filter(
+          (pattern) => pattern instanceof RegExp,
+        )
+      : [],
+  };
+}
+
+function isExternalImageSource(src) {
+  return /^https?:\/\//i.test(src) || /^\/\//.test(src);
+}
+
+function toAbsoluteHttpUrl(src) {
+  if (!src) {
+    return "";
+  }
+
+  if (/^https?:\/\//i.test(src)) {
+    return src;
+  }
+
+  if (/^\/\//.test(src)) {
+    return `${window.location.protocol}${src}`;
+  }
+
+  return src;
+}
+
+function isAllowedExternalImageSource(src, imageSecurityPolicy) {
+  if (!isExternalImageSource(src)) {
+    return true;
+  }
+
+  if (imageSecurityPolicy.allowExternalImages) {
+    return true;
+  }
+
+  const absoluteUrl = toAbsoluteHttpUrl(src);
+
+  if (
+    imageSecurityPolicy.allowedExternalUrlPrefixes.some((prefix) =>
+      absoluteUrl.startsWith(prefix),
+    )
+  ) {
+    return true;
+  }
+
+  if (
+    imageSecurityPolicy.allowedExternalUrlPatterns.some((pattern) =>
+      pattern.test(absoluteUrl),
+    )
+  ) {
+    return true;
+  }
+
+  try {
+    const hostName = new URL(
+      absoluteUrl,
+      window.location.origin,
+    ).hostname.toLowerCase();
+
+    return imageSecurityPolicy.allowedExternalHosts.some(
+      (allowedHost) =>
+        hostName === allowedHost || hostName.endsWith(`.${allowedHost}`),
+    );
+  } catch (_error) {
+    return false;
+  }
+}
+
+function normalizeStandaloneHtml(html, options = {}) {
   const template = document.createElement("template");
   template.innerHTML = html;
+  const imageSecurityPolicy = normalizeImageSecurityPolicy(
+    options.imageSecurityPolicy,
+  );
 
   // Strictly remove links and external references from exported question HTML.
   const anchors = template.content.querySelectorAll("a");
@@ -391,12 +493,19 @@ function normalizeStandaloneHtml(html) {
   const images = template.content.querySelectorAll("img");
   for (const image of images) {
     const src = image.getAttribute("src") || "";
-    const isExternalSource = /^https?:\/\//i.test(src) || /^\/\//.test(src);
+    const isAllowedSource = isAllowedExternalImageSource(
+      src,
+      imageSecurityPolicy,
+    );
 
-    if (isExternalSource) {
+    if (!isAllowedSource) {
       image.removeAttribute("src");
       image.removeAttribute("srcset");
     }
+
+    // Keep image ratio fluid after resize: avoid stale fixed height metadata.
+    image.removeAttribute("height");
+    image.style.removeProperty("aspect-ratio");
   }
 
   const figures = template.content.querySelectorAll("figure.image");
@@ -434,11 +543,17 @@ function normalizeStandaloneHtml(html) {
     image.style.display = "block";
     image.style.maxWidth = "100%";
     image.style.height = "auto";
+    image.style.removeProperty("aspect-ratio");
+    image.removeAttribute("height");
 
     const figureWidthInPixels = pixelValueFromDimension(figureWidth);
 
     if (figureWidth !== "fit-content") {
-      image.style.width = "100%";
+      if (figureWidthInPixels) {
+        image.style.width = figureWidthInPixels;
+      } else {
+        image.style.removeProperty("width");
+      }
 
       if (figureWidthInPixels) {
         image.setAttribute("width", figureWidthInPixels);
@@ -487,6 +602,8 @@ class StandaloneImageAlignment extends Plugin {
         conversionApi.writer.setStyle("display", "block", image);
         conversionApi.writer.setStyle("max-width", "100%", image);
         conversionApi.writer.setStyle("height", "auto", image);
+        conversionApi.writer.removeStyle("aspect-ratio", image);
+        conversionApi.writer.removeAttribute("height", image);
 
         const resizedWidth = normalizeImageDimension(
           data.item.getAttribute("resizedWidth"),
@@ -498,7 +615,15 @@ class StandaloneImageAlignment extends Plugin {
         const exportWidthInPixels = pixelValueFromDimension(exportWidth);
 
         if (exportWidth) {
-          conversionApi.writer.setStyle("width", "100%", image);
+          if (exportWidthInPixels) {
+            conversionApi.writer.setStyle(
+              "width",
+              `${exportWidthInPixels}px`,
+              image,
+            );
+          } else {
+            conversionApi.writer.removeStyle("width", image);
+          }
 
           if (exportWidthInPixels) {
             conversionApi.writer.setAttribute(
@@ -648,12 +773,17 @@ class ClassicEditor extends ClassicEditorBase {
 
     return super.create(element, config).then((editor) => {
       const originalGetData = editor.getData.bind(editor);
+      const imageSecurityPolicy = editor.config.get("imageSecurityPolicy");
 
       editor.getData = (...args) =>
-        normalizeStandaloneHtml(originalGetData(...args));
+        normalizeStandaloneHtml(originalGetData(...args), {
+          imageSecurityPolicy,
+        });
 
       editor.getStandaloneData = (...args) =>
-        normalizeStandaloneHtml(originalGetData(...args));
+        normalizeStandaloneHtml(originalGetData(...args), {
+          imageSecurityPolicy,
+        });
 
       return editor;
     });
@@ -715,6 +845,12 @@ ClassicEditor.builtinPlugins = [
 
 ClassicEditor.defaultConfig = {
   forcePlainTextPaste: true,
+  imageSecurityPolicy: {
+    allowExternalImages: false,
+    allowedExternalHosts: ["asesmenpedia.test"],
+    allowedExternalUrlPrefixes: [],
+    allowedExternalUrlPatterns: [],
+  },
   toolbarProfile: "exam",
   toolbar: {
     items: EXAM_TOOLBAR_ITEMS,

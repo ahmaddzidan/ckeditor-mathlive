@@ -1,0 +1,399 @@
+<script>
+  var editorStimulus = {};
+
+  var IMAGE_SECURITY_POLICY = {
+    allowExternalImages: false,
+    allowedExternalHosts: [window.location.hostname, "asesmenpedia.test"],
+    allowedExternalUrlPrefixes: [],
+    allowedExternalUrlPatterns: [],
+  };
+
+  function normalizeImageSecurityPolicy(policy) {
+    var source = policy || {};
+
+    return {
+      allowExternalImages: source.allowExternalImages === true,
+      allowedExternalHosts: Array.isArray(source.allowedExternalHosts)
+        ? source.allowedExternalHosts
+            .map(function (host) {
+              return String(host || "")
+                .trim()
+                .toLowerCase();
+            })
+            .filter(Boolean)
+        : [],
+      allowedExternalUrlPrefixes: Array.isArray(
+        source.allowedExternalUrlPrefixes,
+      )
+        ? source.allowedExternalUrlPrefixes
+            .map(function (prefix) {
+              return String(prefix || "").trim();
+            })
+            .filter(Boolean)
+        : [],
+      allowedExternalUrlPatterns: Array.isArray(
+        source.allowedExternalUrlPatterns,
+      )
+        ? source.allowedExternalUrlPatterns.filter(function (pattern) {
+            return pattern instanceof RegExp;
+          })
+        : [],
+    };
+  }
+
+  function isExternalImageSource(src) {
+    return (
+      /^https?:\/\//i.test(src || "") ||
+      /^\/\//.test(src || "") ||
+      /^www\./i.test(src || "")
+    );
+  }
+
+  function toAbsoluteUrl(src) {
+    if (!src) {
+      return "";
+    }
+
+    if (/^https?:\/\//i.test(src)) {
+      return src;
+    }
+
+    if (/^\/\//.test(src)) {
+      return window.location.protocol + src;
+    }
+
+    if (/^www\./i.test(src)) {
+      return "https://" + src;
+    }
+
+    return src;
+  }
+
+  function isAllowedExternalImageSource(src, policy) {
+    if (!isExternalImageSource(src)) {
+      return true;
+    }
+
+    if (policy.allowExternalImages) {
+      return true;
+    }
+
+    var absoluteUrl = toAbsoluteUrl(src);
+
+    if (
+      policy.allowedExternalUrlPrefixes.some(function (prefix) {
+        return absoluteUrl.startsWith(prefix);
+      })
+    ) {
+      return true;
+    }
+
+    if (
+      policy.allowedExternalUrlPatterns.some(function (pattern) {
+        return pattern.test(absoluteUrl);
+      })
+    ) {
+      return true;
+    }
+
+    try {
+      var hostName = new URL(
+        absoluteUrl,
+        window.location.origin,
+      ).hostname.toLowerCase();
+
+      return policy.allowedExternalHosts.some(function (allowedHost) {
+        return hostName === allowedHost || hostName.endsWith("." + allowedHost);
+      });
+    } catch (_error) {
+      return false;
+    }
+  }
+
+  var _cke = function (elementId) {
+    if (typeof ClassicEditor == "undefined") {
+      console.warn("Warning - ckeditor_classic.js is not loaded.");
+      return;
+    }
+
+    let uploadPath =
+      "stimulus/" +
+      document.querySelector("#stimulus-form input[name=id]").value +
+      "/";
+
+    ClassicEditor.create(document.getElementById(elementId), {
+      extraPlugins: [CI4UploadAdapterPlugin],
+      imageSecurityPolicy: IMAGE_SECURITY_POLICY,
+      CI4Upload: {
+        uploadUrl: BASE_URL + "/cke-upload",
+        params: { uploadpath: uploadPath },
+        withCredentials: false,
+        headers: {},
+      },
+    })
+      .then((editor) => {
+        editorStimulus[elementId] = editor;
+
+        // Deteksi paste event untuk gambar
+        editor.editing.view.document.on("clipboardInput", (evt, data) => {
+          const imageSecurityPolicy = normalizeImageSecurityPolicy(
+            editor.config.get("imageSecurityPolicy") || IMAGE_SECURITY_POLICY,
+          );
+
+          // Cek apakah ada gambar di clipboard
+          if (
+            data.dataTransfer &&
+            data.dataTransfer.files &&
+            data.dataTransfer.files.length > 0
+          ) {
+            // Ada file yang di-paste (gambar dari clipboard)
+            evt.stop();
+            new Noty({
+              text: "❌ <strong>Copy-paste gambar tidak diizinkan!</strong><br>Gunakan tombol <strong>Upload Image</strong> pada toolbar editor.",
+              type: "error",
+              timeout: 5000,
+            }).show();
+            return;
+          }
+
+          // Cek konten HTML yang di-paste
+          const htmlData = data.dataTransfer.getData("text/html");
+          if (htmlData) {
+            const parsed = new DOMParser().parseFromString(
+              htmlData,
+              "text/html",
+            );
+            const pastedImages = parsed.querySelectorAll("img[src]");
+
+            const hasBlockedExternalImage = Array.from(pastedImages).some(
+              (img) => {
+                const src = img.getAttribute("src") || "";
+
+                return !isAllowedExternalImageSource(src, imageSecurityPolicy);
+              },
+            );
+
+            if (hasBlockedExternalImage) {
+              evt.stop();
+              new Noty({
+                text: "❌ <strong>Copy-paste gambar dari URL external tidak diizinkan!</strong><br>Gunakan gambar dari host whitelist atau upload via tombol <strong>Upload Image</strong>.",
+                type: "error",
+                timeout: 6000,
+              }).show();
+              return;
+            }
+          }
+        });
+
+        // Deteksi penambahan gambar dengan src external melalui cara lain
+        // editor.model.document.on('change:data', () => {
+        //   const editorData = editor.getData();
+        //   const imgRegex = /<img[^>]+src=['"]([^'"]+)['"][^>]*>/gi;
+        //   let match;
+
+        //   while ((match = imgRegex.exec(editorData)) !== null) {
+        //     const src = match[1];
+
+        //     // Cek apakah URL external
+        //     if (src.startsWith('http://') || src.startsWith('https://') || src.startsWith('www.')) {
+        //       // Hapus gambar external
+        //       const updatedData = editorData.replace(match[0], '');
+        //       editor.setData(updatedData);
+
+        //       new Noty({
+        //         text: "❌ <strong>Gambar external telah dihapus!</strong><br>Gunakan tombol <strong>Upload Image</strong> untuk menambahkan gambar.",
+        //         type: "warning",
+        //         timeout: 5000
+        //       }).show();
+        //       break;
+        //     }
+        //   }
+        // });
+      })
+      .catch((error) => {
+        console.error("CKEditor error:", error);
+      });
+  };
+
+  var _componentForm = function () {
+    var createBtn = $(".btn-create-stimulus");
+
+    var indicatorId = null;
+    if (createBtn.length == 1) {
+      var subjectId =
+        createBtn.data("subject-id") ?? $("input[name=subject_id]").val();
+      indicatorId =
+        createBtn.data("indicator-id") ?? $("input[name=indicator_id]").val();
+      // var levelId = createBtn.data('level-id') ?? $('input[name=level_id]').val();
+      var eventId =
+        createBtn.data("event-id") ?? $("input[name=event_id]").val();
+      var questionCode = createBtn.data("code") ?? $("input[name=code]").val();
+      var provinceCode =
+        createBtn.data("province-code") ?? $("input[name=province_code]").val();
+      var districtCode =
+        createBtn.data("district-code") ?? $("input[name=district_code]").val();
+
+      $("input[name=indicator_id]").val(indicatorId);
+      $("input[name=subject_id]").val(subjectId);
+      // $('input[name=level_id]').val(levelId);
+      $("input[name=event_id]").val(eventId);
+      $("input[name=province_code]").val(provinceCode);
+      $("input[name=district_code]").val(districtCode);
+      $("input[name=code]").val(questionCode);
+    } else {
+      indicatorId = $("input[name=indicator_id]").val();
+    }
+
+    $("#stimulus-form").on("submit", function (e) {
+      e.preventDefault();
+
+      $(".btn-save-stimulus").showLoading();
+
+      var formData = $(this).serializeArray();
+
+      if (
+        indicatorId !== undefined &&
+        indicatorId !== null &&
+        indicatorId !== ""
+      ) {
+        formData.push({
+          name: "indicator_id",
+          value: indicatorId,
+        });
+      }
+
+      Object.keys(editorStimulus).forEach(function (key, i) {
+        if (editorStimulus[key]) {
+          // Gunakan name content[] untuk semua stimulus
+          formData.push({
+            name: "content[]",
+            value: editorStimulus[key].getData(),
+          });
+        }
+      });
+
+      formData = formData.filter(
+        (item) => !(item.name === "content" && item.value === ""),
+      );
+      // Filter juga content[] yang kosong
+      formData = formData.filter(
+        (item) => !(item.name === "content[]" && item.value === ""),
+      );
+
+      $.ajax({
+        url: $(this).attr("action"),
+        method: "POST",
+        data: formData,
+        success: function (result) {
+          new Noty({
+            text: result.message,
+            type: result.success == true ? "success" : "error",
+          }).show();
+
+          $(".btn-save-stimulus").hideLoading();
+
+          $("#stimulus-form")
+            .closest(".modal-content")
+            .find('[data-bs-dismiss="modal"]')
+            .trigger("click");
+
+          var defaultOption = $("<option>", {
+            value: result.data.id,
+            text: result.data.title,
+          });
+
+          $("#stimulus_dp").append(defaultOption).trigger("change");
+        },
+        error: function (error) {
+          var result = error.responseJSON;
+          new Noty({
+            text:
+              result && result.message ? result.message : "Terjadi kesalahan",
+            type: "error",
+          }).show();
+          $(".btn-save-stimulus").hideLoading();
+        },
+      });
+    });
+
+    $("#type-id").select2({
+      placeholder: "Pilih Tipe Stimulus",
+      allowClear: true,
+      width: "100%",
+    });
+
+    $(document)
+      .off("click.stimulusAdd")
+      .on("click.stimulusAdd", ".add-stimulus", function () {
+        var itemContentLength = $(".stimulus-multitext .item-content").length;
+        if (itemContentLength >= 3) {
+          new Noty({
+            text: "❌ Maksimal 3 stimulus yang dapat ditambahkan",
+            type: "warning",
+            timeout: 3000,
+          }).show();
+          return;
+        }
+
+        var newId = "content_" + itemContentLength;
+        var stimulusNumber = itemContentLength + 1;
+
+        var itemContent = `
+<div class="mb-3 item-content item-${itemContentLength}">
+<label class="col-form-label fw-bold w-100" for="${newId}">
+Wacana/Stimulus ke-${stimulusNumber}
+                    <a href="javascript:void(0)" class="remove-stimulus btn btn-danger btn-sm float-end">
+                      <i class="ph-trash"></i>
+                    </a>
+                  </label>
+<textarea name="content[]" cols="3" rows="3" id="${newId}" placeholder="Wacana/Stimulus" class="form-control"></textarea>
+                </div>
+              `;
+
+        $(".stimulus-multitext").append(itemContent);
+
+        // Tunggu textarea benar-benar ada di DOM sebelum inisialisasi CKEditor
+        setTimeout(function () {
+          var textarea = document.getElementById(newId);
+          if (textarea) {
+            _cke(newId);
+          }
+        }, 100);
+      })
+      .off("click.stimulusRemove")
+      .on("click.stimulusRemove", ".remove-stimulus", function () {
+        var $item = $(this).closest(".item-content");
+        var textarea = $item.find("textarea");
+        var id = textarea.attr("id");
+        if (editorStimulus[id]) {
+          editorStimulus[id].destroy();
+          delete editorStimulus[id];
+        }
+        $item.remove();
+      });
+    // Inisialisasi CKEditor untuk semua textarea stimulus yang sudah ada
+    $(".stimulus-multitext textarea[id^='content_']").each(function (idx) {
+      var label = $(this).closest(".item-content").find("label");
+      if (label.length) {
+        label.html(
+          `Wacana/Stimulus ke-${
+            idx + 1
+          } <a href="javascript:void(0)" class="remove-stimulus btn btn-danger btn-sm float-end"><i class="ph-trash"></i></a>`,
+        );
+      }
+      _cke(this.id);
+    });
+
+    $('input[name="type"]').on("change", function () {
+      var type = $(this).val();
+
+      if (type == "multiteks") {
+        $(".add-stimulus").removeClass("disabled");
+      } else {
+        $(".add-stimulus").addClass("disabled");
+      }
+    });
+  };
+
+  _componentForm();
+</script>
