@@ -785,8 +785,72 @@ class ClassicEditor extends ClassicEditorBase {
           imageSecurityPolicy,
         });
 
+      // Set proper text direction for RTL/LTR languages
+      const editorLanguage = editor.config.get("language");
+      const editorElement = editor.ui.view.editable.element;
+      setEditorDirectionForLanguage(editorElement, editorLanguage);
+
       return editor;
     });
+  }
+}
+
+function getDefaultAllowedExternalHosts() {
+  if (typeof window === "undefined" || !window.location) {
+    return ["asesmenpedia.test"];
+  }
+
+  const activeHost = String(window.location.hostname || "")
+    .trim()
+    .toLowerCase();
+
+  return activeHost ? [activeHost] : ["asesmenpedia.test"];
+}
+
+function getDefaultAllowedExternalUrlPatterns() {
+  // Match asesmenpedia.* (for example: asesmenpedia.test, asesmenpedia.id)
+  // including long parent domains and optional port numbers.
+  return [
+    /^https?:\/\/(?:[^/.]+\.)*asesmenpedia(?:\.[a-z0-9-]+)+(?::\d+)?(?:\/|$)/i,
+  ];
+}
+
+function getDefaultLanguage() {
+  if (typeof navigator === "undefined") {
+    return "en";
+  }
+
+  const browserLang = String(navigator.language || navigator.userLanguage || "")
+    .toLowerCase()
+    .split("-")[0];
+
+  // Support RTL languages: Arabic, Hebrew, Farsi, Urdu
+  const supportedRtlLanguages = ["ar", "he", "fa", "ur"];
+  // Support other multilingual environments: English, Indonesian, French, Chinese, Japanese, Korean
+  const supportedLanguages = [
+    "en",
+    "id",
+    "fr",
+    "zh",
+    "ja",
+    "ko",
+    ...supportedRtlLanguages,
+  ];
+
+  return supportedLanguages.includes(browserLang) ? browserLang : "en";
+}
+
+function setEditorDirectionForLanguage(element, language) {
+  const rtlLanguages = ["ar", "he", "fa", "ur"];
+  const isRtl = rtlLanguages.includes(String(language || "").toLowerCase());
+
+  if (element) {
+    element.dir = isRtl ? "rtl" : "ltr";
+  }
+
+  // Also set on document if needed
+  if (typeof document !== "undefined" && document.documentElement) {
+    document.documentElement.lang = language || "en";
   }
 }
 
@@ -847,16 +911,16 @@ ClassicEditor.defaultConfig = {
   forcePlainTextPaste: true,
   imageSecurityPolicy: {
     allowExternalImages: false,
-    allowedExternalHosts: ["asesmenpedia.test"],
+    allowedExternalHosts: getDefaultAllowedExternalHosts(),
     allowedExternalUrlPrefixes: [],
-    allowedExternalUrlPatterns: [],
+    allowedExternalUrlPatterns: getDefaultAllowedExternalUrlPatterns(),
   },
   toolbarProfile: "exam",
   toolbar: {
     items: EXAM_TOOLBAR_ITEMS,
     shouldNotGroupWhenFull: false,
   },
-  language: "en",
+  language: getDefaultLanguage(),
   fontSize: {
     options: [10, 12, 14, "default", 18, 20, 22],
     supportAllValues: true,
