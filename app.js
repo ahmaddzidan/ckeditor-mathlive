@@ -125,6 +125,8 @@ const FULL_TOOLBAR_ITEMS = [
   "blockQuote",
   "removeFormat",
   "|",
+  "toggleRtl",
+  "|",
   "findAndReplace",
   "undo",
   "redo",
@@ -786,7 +788,7 @@ class ClassicEditor extends ClassicEditorBase {
         normalizeStandaloneHtml(originalGetData(...args), {
           imageSecurityPolicy,
         });
-return editor;
+      return editor;
     });
   }
 }
