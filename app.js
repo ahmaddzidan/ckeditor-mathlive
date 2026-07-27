@@ -10,6 +10,7 @@ import Paragraph from "@ckeditor/ckeditor5-paragraph/src/paragraph";
 import BlockQuote from "@ckeditor/ckeditor5-block-quote/src/blockquote";
 import HorizontalLine from "@ckeditor/ckeditor5-horizontal-line/src/horizontalline";
 import FindAndReplace from "@ckeditor/ckeditor5-find-and-replace/src/findandreplace";
+import TextPartLanguage from "@ckeditor/ckeditor5-language/src/textpartlanguage";
 import SpecialCharacters from "@ckeditor/ckeditor5-special-characters/src/specialcharacters";
 import SpecialCharactersEssentials from "@ckeditor/ckeditor5-special-characters/src/specialcharactersessentials";
 import SpecialCharactersMathematical from "@ckeditor/ckeditor5-special-characters/src/specialcharactersmathematical";
@@ -72,6 +73,7 @@ const EXAM_TOOLBAR_ITEMS = [
   "heading",
   "fontSize",
   "alignment",
+  "textPartLanguage",
   "|",
   "bold",
   "italic",
@@ -91,8 +93,6 @@ const EXAM_TOOLBAR_ITEMS = [
   "horizontalLine",
   "blockQuote",
   "removeFormat",
-  "|",
-  "toggleRtl",
   "|",
   "findAndReplace",
   "undo",
@@ -105,6 +105,7 @@ const FULL_TOOLBAR_ITEMS = [
   "heading",
   "fontSize",
   "alignment",
+  "textPartLanguage",
   "|",
   "bold",
   "italic",
@@ -124,8 +125,6 @@ const FULL_TOOLBAR_ITEMS = [
   "horizontalLine",
   "blockQuote",
   "removeFormat",
-  "|",
-  "toggleRtl",
   "|",
   "findAndReplace",
   "undo",
@@ -480,6 +479,63 @@ function isAllowedExternalImageSource(src, imageSecurityPolicy) {
   }
 }
 
+function promoteUniformInlineLanguageToBlocks(root) {
+  const blockSelector =
+    "p, div, li, blockquote, h1, h2, h3, h4, h5, h6, td, th";
+  const blocks = root.querySelectorAll(blockSelector);
+
+  for (const block of blocks) {
+    const directChildren = Array.from(block.children);
+
+    if (!directChildren.length) {
+      continue;
+    }
+
+    const hasOnlyInlineLanguageWrappers = directChildren.every((child) => {
+      return (
+        child.tagName === "SPAN" &&
+        (child.hasAttribute("lang") || child.hasAttribute("dir"))
+      );
+    });
+
+    if (!hasOnlyInlineLanguageWrappers) {
+      continue;
+    }
+
+    const hasLooseTextNode = Array.from(block.childNodes).some((node) => {
+      return (
+        node.nodeType === Node.TEXT_NODE &&
+        String(node.textContent || "").trim()
+      );
+    });
+
+    if (hasLooseTextNode) {
+      continue;
+    }
+
+    const blockLang = block.getAttribute("lang");
+    const blockDir = block.getAttribute("dir");
+    const childLangValues = new Set(
+      directChildren
+        .map((child) => child.getAttribute("lang"))
+        .filter((value) => value),
+    );
+    const childDirValues = new Set(
+      directChildren
+        .map((child) => child.getAttribute("dir"))
+        .filter((value) => value),
+    );
+
+    if (!blockLang && childLangValues.size === 1) {
+      block.setAttribute("lang", Array.from(childLangValues)[0]);
+    }
+
+    if (!blockDir && childDirValues.size === 1) {
+      block.setAttribute("dir", Array.from(childDirValues)[0]);
+    }
+  }
+}
+
 function normalizeStandaloneHtml(html, options = {}) {
   const template = document.createElement("template");
   template.innerHTML = html;
@@ -569,6 +625,8 @@ function normalizeStandaloneHtml(html, options = {}) {
       image.removeAttribute("width");
     }
   }
+
+  promoteUniformInlineLanguageToBlocks(template.content);
 
   return template.innerHTML;
 }
@@ -729,8 +787,203 @@ class ForcePlainTextPaste extends Plugin {
   }
 }
 
+class TextPartLanguageBlockSync extends Plugin {
+  static get pluginName() {
+    return "TextPartLanguageBlockSync";
+  }
+
+  static get requires() {
+    return [TextPartLanguage];
+  }
+
+  init() {
+    const { editor } = this;
+    let isSelectionSyncInProgress = false;
+
+    const resolveDirection = (languageCode) => {
+      const options = editor.config.get("language.textPartLanguage") || [];
+      const selectedOption = options.find(
+        (item) => item.languageCode === languageCode,
+      );
+
+      if (selectedOption && selectedOption.textDirection) {
+        return selectedOption.textDirection;
+      }
+
+      return ["ar", "he", "fa", "ur"].includes(languageCode) ? "rtl" : "ltr";
+    };
+
+    editor.model.schema.extend("$block", {
+      allowAttributes: ["blockLanguageCode", "blockTextDirection"],
+    });
+
+    editor.conversion.for("upcast").attributeToAttribute({
+      view: {
+        key: "lang",
+      },
+      model: {
+        key: "blockLanguageCode",
+      },
+    });
+
+    editor.conversion.for("upcast").attributeToAttribute({
+      view: {
+        key: "dir",
+        value: "rtl",
+      },
+      model: {
+        key: "blockTextDirection",
+        value: "rtl",
+      },
+    });
+
+    editor.conversion.for("upcast").attributeToAttribute({
+      view: {
+        key: "dir",
+        value: "ltr",
+      },
+      model: {
+        key: "blockTextDirection",
+        value: "ltr",
+      },
+    });
+
+    editor.conversion.for("dataDowncast").attributeToAttribute({
+      model: "blockLanguageCode",
+      view: (value) => ({
+        key: "lang",
+        value,
+      }),
+    });
+
+    editor.conversion.for("editingDowncast").attributeToAttribute({
+      model: "blockLanguageCode",
+      view: (value) => ({
+        key: "lang",
+        value,
+      }),
+    });
+
+    editor.conversion.for("dataDowncast").attributeToAttribute({
+      model: "blockTextDirection",
+      view: (value) => ({
+        key: "dir",
+        value,
+      }),
+    });
+
+    editor.conversion.for("editingDowncast").attributeToAttribute({
+      model: "blockTextDirection",
+      view: (value) => ({
+        key: "dir",
+        value,
+      }),
+    });
+
+    const textPartLanguageCommand = editor.commands.get("textPartLanguage");
+
+    if (!textPartLanguageCommand) {
+      return;
+    }
+
+    this.listenTo(textPartLanguageCommand, "execute", (evt, args = {}) => {
+      const selectedBlocks = Array.from(
+        editor.model.document.selection.getSelectedBlocks(),
+      );
+
+      if (!selectedBlocks.length) {
+        return;
+      }
+
+      const languageCode = args.languageCode || null;
+      const availableLanguages =
+        editor.config.get("language.textPartLanguage") || [];
+      const selectedLanguage = availableLanguages.find(
+        (item) => item.languageCode === languageCode,
+      );
+      const textDirection = selectedLanguage?.textDirection || null;
+
+      editor.model.change((writer) => {
+        selectedBlocks.forEach((block) => {
+          if (editor.model.schema.checkAttribute(block, "blockLanguageCode")) {
+            if (languageCode) {
+              writer.setAttribute("blockLanguageCode", languageCode, block);
+            } else {
+              writer.removeAttribute("blockLanguageCode", block);
+            }
+          }
+
+          if (editor.model.schema.checkAttribute(block, "blockTextDirection")) {
+            if (textDirection) {
+              writer.setAttribute("blockTextDirection", textDirection, block);
+            } else {
+              writer.removeAttribute("blockTextDirection", block);
+            }
+          }
+        });
+      });
+    });
+
+    const syncSelectionLanguageFromBlock = () => {
+      if (isSelectionSyncInProgress) {
+        return;
+      }
+
+      const selection = editor.model.document.selection;
+
+      if (!selection.isCollapsed) {
+        return;
+      }
+
+      // Do not override explicit inline language selected by TextPartLanguage.
+      const currentLanguageValue = selection.getAttribute("language") || false;
+
+      if (currentLanguageValue) {
+        return;
+      }
+
+      const currentBlock = Array.from(selection.getSelectedBlocks())[0] || null;
+
+      if (!currentBlock) {
+        return;
+      }
+
+      const blockLanguageCode = currentBlock.getAttribute("blockLanguageCode");
+
+      if (!blockLanguageCode) {
+        return;
+      }
+
+      const blockTextDirection =
+        currentBlock.getAttribute("blockTextDirection") ||
+        resolveDirection(blockLanguageCode);
+      const expectedLanguageValue = `${blockLanguageCode}:${blockTextDirection}`;
+
+      isSelectionSyncInProgress = true;
+      editor.model.change((writer) => {
+        writer.setSelectionAttribute("language", expectedLanguageValue);
+      });
+      isSelectionSyncInProgress = false;
+    };
+
+    this.listenTo(
+      editor.model.document.selection,
+      "change:range",
+      syncSelectionLanguageFromBlock,
+    );
+
+    this.listenTo(
+      editor.model.document.selection,
+      "change:attribute",
+      syncSelectionLanguageFromBlock,
+    );
+  }
+}
+
 class ClassicEditor extends ClassicEditorBase {
   static create(element, config = {}) {
+    ensureTextPartLanguageStyles();
+
     const toolbarProfile = config.toolbarProfile || "exam";
 
     if (!config.toolbar || !Array.isArray(config.toolbar.items)) {
@@ -813,18 +1066,101 @@ function getDefaultAllowedExternalUrlPatterns() {
   ];
 }
 
-function setEditorDirectionForLanguage(element, language) {
-  const rtlLanguages = ["ar", "he", "fa", "ur"];
-  const isRtl = rtlLanguages.includes(String(language || "").toLowerCase());
+const TEXT_PART_LANGUAGE_STYLE_ID = "ckeditor-text-part-language-styles";
 
-  if (element) {
-    element.dir = isRtl ? "rtl" : "ltr";
+function ensureTextPartLanguageStyles() {
+  if (typeof document === "undefined") {
+    return;
   }
 
-  // Also set on document if needed
-  if (typeof document !== "undefined" && document.documentElement) {
-    document.documentElement.lang = language || "en";
+  if (document.getElementById(TEXT_PART_LANGUAGE_STYLE_ID)) {
+    return;
   }
+
+  const style = document.createElement("style");
+  style.id = TEXT_PART_LANGUAGE_STYLE_ID;
+  style.textContent = `
+    .ck-content [lang="ar"],
+    .ck-content [lang="he"],
+    .ck-content [lang="fa"],
+    .ck-content [lang="ur"],
+    .ck-content [dir="rtl"],
+    .output-preview [lang="ar"],
+    .output-preview [lang="he"],
+    .output-preview [lang="fa"],
+    .output-preview [lang="ur"],
+    .output-preview [dir="rtl"],
+    #preview [lang="ar"],
+    #preview [lang="he"],
+    #preview [lang="fa"],
+    #preview [lang="ur"],
+    #preview [dir="rtl"] {
+      direction: rtl;
+      unicode-bidi: plaintext;
+      text-align: right;
+      font-family: "Noto Naskh Arabic", "Noto Sans Arabic", Tahoma, Arial, sans-serif;
+    }
+
+    .ck-content [lang="zh"],
+    .ck-content [lang="ja"],
+    .ck-content [lang="ko"],
+    .output-preview [lang="zh"],
+    .output-preview [lang="ja"],
+    .output-preview [lang="ko"],
+    #preview [lang="zh"],
+    #preview [lang="ja"],
+    #preview [lang="ko"] {
+      word-break: keep-all;
+      line-break: strict;
+      font-family: "Noto Sans SC", "Noto Sans JP", "Noto Sans KR", system-ui, sans-serif;
+    }
+
+    .ck-content [dir="ltr"],
+    .output-preview [dir="ltr"],
+    #preview [dir="ltr"] {
+      direction: ltr;
+      unicode-bidi: plaintext;
+      text-align: left;
+    }
+
+    .ck-content span[lang],
+    .ck-content span[dir],
+    .output-preview span[lang],
+    .output-preview span[dir],
+    #preview span[lang],
+    #preview span[dir] {
+      display: inline-block;
+    }
+
+    .ck-content p[lang],
+    .ck-content div[lang],
+    .ck-content li[lang],
+    .ck-content blockquote[lang],
+    .ck-content p[dir],
+    .ck-content div[dir],
+    .ck-content li[dir],
+    .ck-content blockquote[dir],
+    .output-preview p[lang],
+    .output-preview div[lang],
+    .output-preview li[lang],
+    .output-preview blockquote[lang],
+    .output-preview p[dir],
+    .output-preview div[dir],
+    .output-preview li[dir],
+    .output-preview blockquote[dir],
+    #preview p[lang],
+    #preview div[lang],
+    #preview li[lang],
+    #preview blockquote[lang],
+    #preview p[dir],
+    #preview div[dir],
+    #preview li[dir],
+    #preview blockquote[dir] {
+      display: block;
+    }
+  `;
+
+  document.head.appendChild(style);
 }
 
 ClassicEditor.builtinPlugins = [
@@ -874,6 +1210,8 @@ ClassicEditor.builtinPlugins = [
   TableProperties,
   TableToolbar,
   TextTransformation,
+  TextPartLanguage,
+  TextPartLanguageBlockSync,
   Underline,
   Mathlive,
   // ClassicImageResize,
@@ -893,7 +1231,22 @@ ClassicEditor.defaultConfig = {
     items: EXAM_TOOLBAR_ITEMS,
     shouldNotGroupWhenFull: false,
   },
-  language: "en",
+  language: {
+    ui: "en",
+    content: "en",
+    textPartLanguage: [
+      { title: "Arabic", languageCode: "ar", textDirection: "rtl" },
+      { title: "Hebrew", languageCode: "he", textDirection: "rtl" },
+      { title: "Farsi", languageCode: "fa", textDirection: "rtl" },
+      { title: "Urdu", languageCode: "ur", textDirection: "rtl" },
+      { title: "Indonesian", languageCode: "id", textDirection: "ltr" },
+      { title: "English", languageCode: "en", textDirection: "ltr" },
+      { title: "French", languageCode: "fr", textDirection: "ltr" },
+      { title: "Chinese", languageCode: "zh", textDirection: "ltr" },
+      { title: "Japanese", languageCode: "ja", textDirection: "ltr" },
+      { title: "Korean", languageCode: "ko", textDirection: "ltr" },
+    ],
+  },
   fontSize: {
     options: [10, 12, 14, "default", 18, 20, 22],
     supportAllValues: true,

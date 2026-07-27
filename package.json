@@ -20,6 +20,7 @@
     "@ckeditor/ckeditor5-heading": "44.2.1",
     "@ckeditor/ckeditor5-horizontal-line": "44.2.1",
     "@ckeditor/ckeditor5-image": "44.2.1",
+    "@ckeditor/ckeditor5-language": "44.2.1",
     "@ckeditor/ckeditor5-list": "44.2.1",
     "@ckeditor/ckeditor5-paragraph": "44.2.1",
     "@ckeditor/ckeditor5-special-characters": "44.2.1",
