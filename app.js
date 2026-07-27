@@ -92,6 +92,8 @@ const EXAM_TOOLBAR_ITEMS = [
   "blockQuote",
   "removeFormat",
   "|",
+  "toggleRtl",
+  "|",
   "findAndReplace",
   "undo",
   "redo",
@@ -784,13 +786,7 @@ class ClassicEditor extends ClassicEditorBase {
         normalizeStandaloneHtml(originalGetData(...args), {
           imageSecurityPolicy,
         });
-
-      // Set proper text direction for RTL/LTR languages
-      const editorLanguage = editor.config.get("language");
-      const editorElement = editor.ui.view.editable.element;
-      setEditorDirectionForLanguage(editorElement, editorLanguage);
-
-      return editor;
+return editor;
     });
   }
 }
@@ -813,31 +809,6 @@ function getDefaultAllowedExternalUrlPatterns() {
   return [
     /^https?:\/\/(?:[^/.]+\.)*asesmenpedia(?:\.[a-z0-9-]+)+(?::\d+)?(?:\/|$)/i,
   ];
-}
-
-function getDefaultLanguage() {
-  if (typeof navigator === "undefined") {
-    return "en";
-  }
-
-  const browserLang = String(navigator.language || navigator.userLanguage || "")
-    .toLowerCase()
-    .split("-")[0];
-
-  // Support RTL languages: Arabic, Hebrew, Farsi, Urdu
-  const supportedRtlLanguages = ["ar", "he", "fa", "ur"];
-  // Support other multilingual environments: English, Indonesian, French, Chinese, Japanese, Korean
-  const supportedLanguages = [
-    "en",
-    "id",
-    "fr",
-    "zh",
-    "ja",
-    "ko",
-    ...supportedRtlLanguages,
-  ];
-
-  return supportedLanguages.includes(browserLang) ? browserLang : "en";
 }
 
 function setEditorDirectionForLanguage(element, language) {
@@ -920,7 +891,7 @@ ClassicEditor.defaultConfig = {
     items: EXAM_TOOLBAR_ITEMS,
     shouldNotGroupWhenFull: false,
   },
-  language: getDefaultLanguage(),
+  language: "en",
   fontSize: {
     options: [10, 12, 14, "default", 18, 20, 22],
     supportAllValues: true,
